@@ -3,13 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 
-/**
- * Chat conversation page
- *
- * Displays the realtime chat interface for a specific conversation.
- * Uses dynamic import for socket.io-client to avoid pulling Node-only deps
- * into the Next production build on Render.
- */
 export default function ConversationPage() {
   const params = useParams();
   const conversationId = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -30,16 +23,15 @@ export default function ConversationPage() {
 
     let disposed = false;
 
-    async function joinConversation() {
+    (async () => {
       try {
         setError(null);
 
-        // Join conversation via REST API first to perform server-side checks
         const res = await fetch("/api/chat/join", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ conversationId }),
+          body: JSON.stringify({ conversationId })
         });
 
         if (!res.ok) {
@@ -47,7 +39,7 @@ export default function ConversationPage() {
           throw new Error(`Unable to join conversation: ${text || res.statusText}`);
         }
 
-        // Dynamic import avoids Next bundling Node transports in production build
+        // ✅ dynamic import prevents Next from bundling Node websocket deps
         const mod = await import("socket.io-client");
         const io = mod.io || mod.default;
 
@@ -55,8 +47,8 @@ export default function ConversationPage() {
 
         const socket = io({
           path: "/socket.io",
-          transports: ["websocket"], // force browser websocket transport
-          withCredentials: true,
+          transports: ["websocket"],
+          withCredentials: true
         });
 
         socketRef.current = socket;
@@ -66,47 +58,40 @@ export default function ConversationPage() {
         });
 
         socket.on("history", (msgs) => {
-          if (!disposed) {
-            setMessages(Array.isArray(msgs) ? msgs : []);
-            scrollToBottom();
-          }
+          if (disposed) return;
+          setMessages(Array.isArray(msgs) ? msgs : []);
+          scrollToBottom();
         });
 
         socket.on("message", (msg) => {
-          if (!disposed) {
-            setMessages((prev) => [...prev, msg]);
-            scrollToBottom();
-          }
+          if (disposed) return;
+          setMessages((prev) => [...prev, msg]);
+          scrollToBottom();
         });
 
         socket.on("connect_error", (err) => {
           if (!disposed) setError(err?.message || "Socket connection error");
         });
-      } catch (err) {
-        if (!disposed) setError(err?.message || "Failed to join conversation");
+      } catch (e) {
+        if (!disposed) setError(e?.message || "Failed to join conversation");
       }
-    }
-
-    joinConversation();
+    })();
 
     return () => {
       disposed = true;
 
-      // Leave via REST and close socket
       fetch("/api/chat/leave", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ conversationId }),
+        body: JSON.stringify({ conversationId })
       }).catch(() => {});
 
       if (socketRef.current) {
         try {
           socketRef.current.emit("leave", { conversationId });
           socketRef.current.close();
-        } catch {
-          // ignore
-        }
+        } catch {}
         socketRef.current = null;
       }
     };
@@ -115,36 +100,31 @@ export default function ConversationPage() {
   const sendMessage = () => {
     if (!input.trim() || !socketRef.current) return;
 
-    // Optimistic UI
     const temp = {
       _id: Math.random().toString(36).slice(2),
       sender: "You",
       content: input,
-      createdAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
     };
-
     setMessages((prev) => [...prev, temp]);
 
     try {
       socketRef.current.emit("message", { conversationId, content: input });
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     setInput("");
     scrollToBottom();
   };
 
   return (
-    <div style={{ padding: "20px", height: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ padding: 20, height: "100vh", display: "flex", flexDirection: "column" }}>
       <h1>Conversation</h1>
-
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-      <div style={{ flex: 1, overflowY: "auto", border: "1px solid #ccc", padding: "10px", marginBottom: "10px" }}>
+      <div style={{ flex: 1, overflowY: "auto", border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
         {messages.map((msg) => (
-          <div key={msg._id || msg.id || Math.random()} style={{ marginBottom: "8px" }}>
-            <div style={{ fontSize: "12px", color: "#666" }}>
+          <div key={msg._id || msg.id || Math.random()} style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 12, color: "#666" }}>
               {msg.sender} &bull; {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : ""}
             </div>
             <div>{msg.content}</div>
@@ -155,13 +135,10 @@ export default function ConversationPage() {
 
       <div style={{ display: "flex" }}>
         <input
-          type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") sendMessage();
-          }}
-          style={{ flex: 1, marginRight: "8px" }}
+          onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          style={{ flex: 1, marginRight: 8 }}
         />
         <button onClick={sendMessage}>Send</button>
       </div>
