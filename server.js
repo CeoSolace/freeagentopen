@@ -13,7 +13,10 @@ dotenv.config();
 const { connectMongo } = require("./src/server/db/mongoose");
 const { log, warn, error: logError } = require("./src/shared/logger");
 const errorMiddleware = require("./src/server/errors/errorMiddleware");
-const { handleUncaughtErrors, handleUnhandledRejections } = require("./src/server/errors/processHandlers");
+const {
+  handleUncaughtErrors,
+  handleUnhandledRejections
+} = require("./src/server/errors/processHandlers");
 const { createIncident } = require("./src/server/incidents/incidentService");
 const { uuidv4 } = require("./src/shared/ids");
 
@@ -23,7 +26,7 @@ try { require("./models/User"); } catch {}
 try { require("./models/AuditLog"); } catch {}
 try { require("./models/Incident"); } catch {}
 
-const port = Number(process.env.PORT) || 3006;
+const port = Number(process.env.PORT) || 3000;
 const dev = process.env.NODE_ENV !== "production";
 
 async function bootstrap() {
@@ -48,6 +51,7 @@ async function bootstrap() {
   const app = express();
   app.set("trust proxy", 1);
 
+  // Security and parsing middlewares
   app.use(helmet());
   app.use(cookieParser());
   app.use(compression());
@@ -64,13 +68,13 @@ async function bootstrap() {
     apiRouter = express.Router().all("*", (req, res) => {
       res.status(503).json({
         ok: false,
-        error: { code: "SERVICE_UNAVAILABLE", message: "Service Unavailable" },
+        error: { code: "SERVICE_UNAVAILABLE", message: "Service Unavailable" }
       });
     });
   }
   app.use("/api", apiRouter);
 
-  // Create HTTP server
+  // Create HTTP server (for Next + API + Socket.IO)
   const server = http.createServer(app);
 
   // Attach Socket.IO if module exists
@@ -86,7 +90,7 @@ async function bootstrap() {
     warn("Socket.IO module not found, skipping socket setup");
   }
 
-  // Start Discord bot (bot is at ./bot)
+  // Start Discord bot (NOTE: bot is at ./bot)
   try {
     const { startBot } = require("./bot/index");
     if (typeof startBot !== "function") {
@@ -101,15 +105,17 @@ async function bootstrap() {
     warn(`Bot module not found or failed to start: ${err.message}`);
   }
 
-  // Next handler
+  // Next.js page handler (must be after API mount)
   app.all("*", (req, res) => {
     Promise.resolve(handle(req, res)).catch((err) => {
       errorMiddleware(err, req, res, () => {});
     });
   });
 
+  // Error handling middleware should be last
   app.use(errorMiddleware);
 
+  // Start listening
   server.listen(port, () => {
     log(`Server ready on port ${port}`);
   });
@@ -122,7 +128,9 @@ async function bootstrap() {
     try {
       const mongoose = require("mongoose");
       if (mongoose.connection && mongoose.connection.readyState) {
-        mongoose.connection.close(false).then(() => log("MongoDB connection closed"));
+        mongoose.connection
+          .close(false)
+          .then(() => log("MongoDB connection closed"));
       }
     } catch {
       // ignore
@@ -134,6 +142,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch(async (err) => {
+  // Create an incident on startup failure
   const refId = uuidv4();
   logError("Startup error:", err);
 
@@ -143,7 +152,11 @@ bootstrap().catch(async (err) => {
       route: "startup",
       userId: null,
       severity: "critical",
-      safeError: { name: err.name, message: err.message, stack: err.stack },
+      safeError: {
+        name: err.name,
+        message: err.message,
+        stack: err.stack
+      }
     });
   } catch (incidentErr) {
     logError("Failed to record incident for startup error:", incidentErr);
