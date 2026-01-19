@@ -1,44 +1,54 @@
-const { handleCallback } = require('../../../../src/server/auth/discordOAuth');
-const { User } = require('../../../../models/User');
-const session = require('../../../../src/server/auth/session');
-const { NextResponse } = require('next/server');
+const { NextResponse } = require("next/server");
+
+// Use TS path alias "@/..."
+const { handleCallback } = require("@/src/server/auth/discordOAuth");
+
+// IMPORTANT: models/User.js exports the model directly, not { User }
+const User = require("@/models/User");
+
+const session = require("@/src/server/auth/session");
 
 /*
- * API route: handle Discord OAuth callback.  Expects a POST body
- * containing the `code` (and optional `state`) returned by Discord.
- * Exchanges the code for a profile, then resolves or creates the
- * user in accordance with the signup rules.  Finally a session is
- * created and the session cookie is set.  The response body
- * contains the authenticated user on success.
+ * API route: handle Discord OAuth callback.
+ * Expects JSON body containing { code } returned by Discord.
+ * Exchanges code -> profile, then resolves/creates user, then sets session cookie.
  */
 
 async function POST(req) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { code } = body || {};
+
     if (!code) {
-      return NextResponse.json({ error: 'Missing code' }, { status: 400 });
+      return NextResponse.json({ error: "Missing code" }, { status: 400 });
     }
+
     const profile = await handleCallback(code);
     const user = await User.upsertFromDiscord(profile);
-    // Create session (store and generate ID)
-    const fakeRes = { cookie() {} };
-    const sessionId = session.createSession(fakeRes, user.id);
-    // Build response
-    const response = NextResponse.json({ success: true, user: user.toJSON() });
-    // Set session cookie
-    const secure = process.env.NODE_ENV === 'production';
-    response.cookies.set(session.SESSION_COOKIE, sessionId, {
+
+    // Create session ID using your session module
+    // (Your module must expose createSession + SESSION_COOKIE)
+    const sessionId = await session.createSession(user._id || user.id);
+
+    const response = NextResponse.json({
+      success: true,
+      user: typeof user.toJSON === "function" ? user.toJSON() : user,
+    });
+
+    const secure = process.env.NODE_ENV === "production";
+
+    response.cookies.set(session.SESSION_COOKIE || "freeagent_session", sessionId, {
       httpOnly: true,
       secure,
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7,
-      path: '/',
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+      path: "/",
     });
+
     return response;
   } catch (err) {
     const status = err.status || 500;
-    const message = err.message || 'OAuth callback failed';
+    const message = err.message || "OAuth callback failed";
     return NextResponse.json({ error: message }, { status });
   }
 }
