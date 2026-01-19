@@ -7,7 +7,7 @@ const BillingStatusSchema = new mongoose.Schema(
       ref: "User",
       required: true,
       index: true,
-      unique: true,
+      unique: true
     },
 
     // FREE | PRO | ULT
@@ -15,7 +15,7 @@ const BillingStatusSchema = new mongoose.Schema(
       type: String,
       enum: ["FREE", "PRO", "ULT"],
       default: "FREE",
-      index: true,
+      index: true
     },
 
     // Stripe linkage (used by billing/webhooks)
@@ -28,12 +28,12 @@ const BillingStatusSchema = new mongoose.Schema(
 
     // Weekly chat limit tracking
     chatsWeekStart: { type: Date, default: null },
-    chatsStartedThisWeek: { type: Number, default: 0 },
+    chatsStartedThisWeek: { type: Number, default: 0 }
   },
   { timestamps: true }
 );
 
-// Helpful index for expiry queries (optional)
+// Helpful index for expiry queries
 BillingStatusSchema.index({ until: 1 });
 
 module.exports =
