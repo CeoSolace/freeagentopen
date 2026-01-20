@@ -1,56 +1,69 @@
 const { NextResponse } = require("next/server");
 
-// Use TS path alias "@/..."
+// TS alias works in Next App Router
 const { handleCallback } = require("@/src/server/auth/discordOAuth");
 
-// IMPORTANT: models/User.js exports the model directly, not { User }
+// IMPORTANT: User model is default export
 const User = require("@/models/User");
 
 const session = require("@/src/server/auth/session");
 
-/*
- * API route: handle Discord OAuth callback.
- * Expects JSON body containing { code } returned by Discord.
- * Exchanges code -> profile, then resolves/creates user, then sets session cookie.
+/**
+ * Discord OAuth callback
+ * Discord ALWAYS redirects with GET:
+ * /api/auth/discord/callback?code=...&state=...
  */
-
-async function POST(req) {
+async function GET(req) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const { code } = body || {};
+    const { searchParams } = new URL(req.url);
+    const code = searchParams.get("code");
 
     if (!code) {
-      return NextResponse.json({ error: "Missing code" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing OAuth code" },
+        { status: 400 }
+      );
     }
 
+    // Exchange code → Discord profile
     const profile = await handleCallback(code);
+
+    // Create or update user
     const user = await User.upsertFromDiscord(profile);
 
-    // Create session ID using your session module
-    // (Your module must expose createSession + SESSION_COOKIE)
-    const sessionId = await session.createSession(user._id || user.id);
+    // Create session
+    const sessionId = await session.createSession(
+      user._id?.toString() || user.id
+    );
 
-    const response = NextResponse.json({
-      success: true,
-      user: typeof user.toJSON === "function" ? user.toJSON() : user,
-    });
+    // Redirect response (OAuth best practice)
+    const response = NextResponse.redirect(
+      `${process.env.BASE_URL || ""}/dashboard`
+    );
 
     const secure = process.env.NODE_ENV === "production";
 
-    response.cookies.set(session.SESSION_COOKIE || "freeagent_session", sessionId, {
-      httpOnly: true,
-      secure,
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-    });
+    response.cookies.set(
+      session.SESSION_COOKIE || "freeagent_session",
+      sessionId,
+      {
+        httpOnly: true,
+        secure,
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 7, // 7 days
+        path: "/",
+      }
+    );
 
     return response;
   } catch (err) {
-    const status = err.status || 500;
-    const message = err.message || "OAuth callback failed";
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json(
+      {
+        error: err?.message || "Discord OAuth failed",
+      },
+      { status: err?.status || 500 }
+    );
   }
 }
 
-module.exports = { POST };
+module.exports = { GET };
