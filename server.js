@@ -6,15 +6,12 @@ const compression = require('compression');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
-const csurf = require('csurf');
-
+const csurf = require('@dr.pogodin/csurf');
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
-
 app.prepare().then(() => {
   const server = express();
-
   server.use(helmet({
     contentSecurityPolicy: {
       useDefaults: true,
@@ -34,7 +31,6 @@ app.prepare().then(() => {
     standardHeaders: true,
     legacyHeaders: false
   }));
-
   const csrfProtection = csurf({
     cookie: {
       httpOnly: true,
@@ -43,20 +39,16 @@ app.prepare().then(() => {
     }
   });
   server.use(csrfProtection);
-
   server.use((req, res, next) => {
     res.locals.csrfToken = req.csrfToken();
     next();
   });
-
   if (process.env.ADS_ENABLED === 'true') {
     server.use((req, res, next) => {
       next();
     });
   }
-
   server.all('*', (req, res) => handle(req, res));
-
   const port = process.env.PORT || 3000;
   server.listen(port, (err) => {
     if (err) throw err;
