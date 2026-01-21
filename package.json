@@ -22,6 +22,7 @@
     "next": "^13.4.19",
     "next-auth": "^4.24.5",
     "@auth/prisma-adapter": "^1.2.0",
+    "@dr.pogodin/csurf": "^1.16.8",
     "@prisma/client": "^5.18.0",
     "socket.io": "^4.7.2",
     "socket.io-client": "^4.7.2",
