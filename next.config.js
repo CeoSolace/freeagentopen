@@ -1,9 +1,13 @@
-const path = require('path');
-
+// next.config.js
 module.exports = {
-  webpack: (config) => {
-    // Explicitly set the '@' alias to the project root
-    config.resolve.alias['@'] = path.resolve(__dirname);
-    return config;
-  },
+  reactStrictMode: true,
+  swcMinify: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**'
+      }
+    ]
+  }
 };
