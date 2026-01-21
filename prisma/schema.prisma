@@ -1,16 +1,30 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
+// prisma/schema.prisma - Robust models, indexes for perf
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"  // Change to "mysql", "sqlite", etc., based on your DB
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-// Required models for NextAuth with PrismaAdapter
+enum Role {
+  USER
+  OWNER
+}
+
+enum Plan {
+  FREE
+  PRO
+  ULT
+}
+
+enum ListingStatus {
+  PENDING
+  ACTIVE
+  SOLD
+}
+
 model Account {
   id                 String  @id @default(cuid())
   userId             String
@@ -28,6 +42,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId])
 }
 
 model Session {
@@ -36,6 +51,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model User {
@@ -44,8 +61,12 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  role          Role      @default(USER)
   accounts      Account[]
   sessions      Session[]
+  billingStatus BillingStatus?
+
+  @@index([email])
 }
 
 model VerificationToken {
@@ -54,4 +75,65 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model PricingConfig {
+  id          String @id @default(cuid())
+  name        String
+  description String
+  basePrice   Float
+  currency    String @default("usd")
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  players     Player[]
+
+  @@index([slug])
+}
+
+model Player {
+  id       String  @id @default(cuid())
+  name     String
+  slug     String  @unique
+  position String?
+  teamId   String
+  team     Team    @relation(fields: [teamId], references: [id])
+  listings Listing[]
+
+  @@index([slug])
+  @@index([teamId])
+}
+
+model Listing {
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  price       Float
+  status      ListingStatus @default(PENDING)
+  playerId    String
+  player      Player        @relation(fields: [playerId], references: [id])
+
+  @@index([playerId])
+  @@index([status])
+}
+
+model BillingStatus {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  plan                 Plan     @default(FREE)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  since                DateTime @default(now())
+  until                DateTime?
+  chatsWeekStart       DateTime?
+  chatsStartedThisWeek Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
