@@ -1,12 +1,12 @@
-// server.js
+// server.js - Cleaned, security enhanced, bot separated
 require('dotenv').config();
 const express = require('express');
 const next = require('next');
-const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const compression = require('compression');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
+const csurf = require('csurf');
 
 const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
@@ -15,65 +15,31 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
   const server = express();
 
-  // Security & Perf
-  server.use(helmet());
+  server.use(helmet({ contentSecurityPolicy: { useDefaults: true, directives: { 'script-src': ["'self'", "'unsafe-eval'"], 'img-src': ["'self'", 'data:'] } } }));
   server.use(compression());
-  server.use(cookieParser(process.env.COOKIE_NAME));
-  server.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+  server.use(cookieParser(process.env.COOKIE_SECRET || 'secret'));
+  server.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false }));
 
-  // Discord Bot Setup
-  const client = new Client({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages],
-    partials: [Partials.Message, Partials.Channel, Partials.Reaction],
-  });
+  const csrfProtection = csurf({ cookie: { httpOnly: true, secure: !dev } });
+  server.use(csrfProtection);
 
-  client.once('ready', () => {
-    console.log(`Discord Bot ready as ${client.user.tag}`);
-    // Example: Send welcome to app channel
-    const appChannel = client.channels.cache.get(process.env.DISCORD_APP_CHANNEL_ID);
-    if (appChannel) appChannel.send('Bot online!');
-  });
-
-  client.on('guildMemberAdd', async (member) => {
-    if (member.guild.id === process.env.DISCORD_GUILD_ID) {
-      await member.roles.add(process.env.DISCORD_MEMBER_ROLE_ID);
-      // Lock role if needed: await member.roles.add(process.env.DISCORD_LOCK_ROLE_ID);
-    }
-  });
-
-  client.on('error', (error) => {
-    console.error('Discord Error:', error);
-    const errorChannel = client.channels.cache.get(process.env.ERROR_ALERT_FIX_CHANNEL_ID);
-    if (errorChannel) errorChannel.send(`<@${process.env.ERROR_PING_ID}> Error: ${error.message}`);
-  });
-
-  client.on('messageCreate', async (message) => {
-    if (message.channel.id === process.env.ISSUE_CHANNEL_ID && message.content.startsWith('!issue')) {
-      // Handle issues, e.g., email owner
-      console.log(`Issue reported: ${message.content}`);
-      // Pseudo: sendEmail(process.env.OWNER_EMAIL, message.content);
-    }
-  });
-
-  client.login(process.env.DISCORD_BOT_TOKEN);
-
-  // Ads Toggle (example middleware)
-  if (process.env.ADS_ENABLED === 'true') {
-    server.use((req, res, next) => {
-      // Inject ads logic if needed
-      next();
-    });
-  }
-
-  // CSRF Protection (basic example)
   server.use((req, res, next) => {
-    if (req.method === 'POST') {
-      // Validate CSRF token using process.env.CSRF_SECRET
+    if (req.path.startsWith('/api/')) {
+      csrfProtection(req, res, next);
+    } else {
+      next();
     }
+  });
+
+  server.use((req, res, next) => {
+    res.locals.csrfToken = req.csrfToken();
     next();
   });
 
-  // Next.js Handler
+  if (process.env.ADS_ENABLED === 'true') {
+    // Ads middleware stub
+  }
+
   server.all('*', (req, res) => handle(req, res));
 
   server.listen(process.env.PORT || 3000, (err) => {
