@@ -10,19 +10,20 @@ export const authOptions = {
     DiscordProvider({
       clientId: process.env.DISCORD_CLIENT_ID,
       clientSecret: process.env.DISCORD_CLIENT_SECRET,
-      authorization: { params: { scope: 'identify email guilds' } },  // For guild access if needed
+      authorization: { params: { scope: 'identify email guilds' } }, // For guild access if needed
     }),
   ],
   secret: process.env.NEXTAUTH_SECRET,
-  session: { strategy: 'jwt' },
+  // Remove explicit 'jwt' strategy to default to 'database' with adapter
   callbacks: {
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.sub;
-        session.user.discordId = token.discordId;  // Custom if needed
+    async session({ session, user }) {
+      if (user) {
+        session.user.id = user.id;
+        session.user.discordId = user.discordId; // If 'discordId' is stored in user model
       }
       return session;
     },
+    // JWT callback can be retained if needed for custom token handling, but not required for database strategy
     async jwt({ token, account, profile }) {
       if (account) {
         token.accessToken = account.access_token;
@@ -32,7 +33,7 @@ export const authOptions = {
     },
   },
   pages: {
-    signIn: '/auth/signin',  // Custom if you have one
+    signIn: '/auth/signin', // Custom if you have one
   },
   cookies: {
     sessionToken: {
