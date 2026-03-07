@@ -1,4 +1,4 @@
-export const authOptions = authOptionsInternal;
-import { handler } from '../../../../lib/auth';
+import { authOptions, handler } from "../../../../lib/auth";
 
+export { authOptions };
 export { handler as GET, handler as POST };
