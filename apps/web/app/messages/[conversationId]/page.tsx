@@ -1,39 +1,65 @@
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../api/auth/[...nextauth]/route';
-import { notFound, redirect } from 'next/navigation';
-import { connectDB } from '../../../lib/mongoose';
-import { ConversationModel } from '../../../models/conversation';
-import { UserModel } from '../../../models/user';
-import MessageThread from '../../../components/MessageThread';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../../api/auth/[...nextauth]/route";
+import { redirect } from "next/navigation";
+import mongoose from "mongoose";
+import ConversationModel from "../../../models/Conversation";
+import UserModel from "../../../models/User";
 
-interface ConversationPageProps {
-  params: { conversationId: string };
+interface PageProps {
+  params: {
+    conversationId: string;
+  };
 }
 
-/**
- * Displays a conversation thread. Validates that the current user is a participant
- * in the conversation, otherwise shows a 404. Preloads the other participant
- * details and renders the MessageThread client component.
- */
-export default async function ConversationPage({ params }: ConversationPageProps) {
+export default async function ConversationPage({ params }: PageProps) {
   const session = await getServerSession(authOptions);
-  if (!session) {
-    redirect('/');
+
+  if (!session?.user?.id) {
+    redirect("/verify");
   }
-  const { conversationId } = params;
-  await connectDB();
-  const convo = await ConversationModel.findById(conversationId);
-  if (!convo || !convo.participantIds.includes(session.user.id as any)) {
-    return notFound();
+
+  if (!mongoose.Types.ObjectId.isValid(params.conversationId)) {
+    redirect("/messages");
   }
-  // Determine the other participant
-  const otherId = convo.participantIds.find(id => id.toString() !== session.user.id);
+
+  const convo = await ConversationModel.findById(params.conversationId);
+
+  if (!convo) {
+    redirect("/messages");
+  }
+
+  const otherId = convo.participantIds.find(
+    (id: mongoose.Types.ObjectId) => id.toString() !== session.user.id
+  );
+
   const otherUser = otherId ? await UserModel.findById(otherId) : null;
+
   return (
     <div className="space-y-4 h-full">
-      <h2 className="text-2xl font-semibold">Conversation with {otherUser?.username || 'User'}</h2>
-      <div className="h-[70vh]">
-        <MessageThread conversationId={conversationId} />
+      <div className="border-b pb-4">
+        <h1 className="text-xl font-semibold">
+          Conversation with {otherUser?.username ?? "Unknown User"}
+        </h1>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Messages will render here */}
+      </div>
+
+      <div className="border-t pt-4">
+        <form className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Type a message..."
+            className="flex-1 border rounded px-3 py-2"
+          />
+          <button
+            type="submit"
+            className="bg-black text-white px-4 py-2 rounded"
+          >
+            Send
+          </button>
+        </form>
       </div>
     </div>
   );
