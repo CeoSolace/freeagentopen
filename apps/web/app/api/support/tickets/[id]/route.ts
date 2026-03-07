@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../auth/[...nextauth]/route';
+import { authOptions } from '../../../auth/[...nextauth]/route';
 import { connectDB } from '../../../../../lib/mongoose';
 import { TicketModel } from '../../../../../models/ticket';
 import { TicketMessageModel } from '../../../../../models/ticketMessage';
