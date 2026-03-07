@@ -1,0 +1,18 @@
+services:
+  - type: worker
+    name: freeagentsltd-bot-worker
+    env: node
+    plan: standard
+    buildCommand: |
+      pnpm install --frozen-lockfile
+      pnpm --filter bot-worker build
+    startCommand: pnpm --filter bot-worker start
+    envVars:
+      - key: PORT
+        value: "4000"
+      - key: NODE_ENV
+        value: production
+    # The bot/worker exposes a lightweight HTTP server for internal
+    # endpoints and health checks.  Render will check this path to
+    # determine if the service is healthy.
+    healthCheckPath: /health

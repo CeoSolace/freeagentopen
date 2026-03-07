@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: freeagentsltd-web
+    env: node
+    plan: standard
+    buildCommand: |
+      # Install dependencies and build the web application
+      pnpm install --frozen-lockfile
+      pnpm --filter web build
+    startCommand: pnpm --filter web start
+    # Configure the port for Render to expose.  Next.js defaults to 3000.
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: NODE_ENV
+        value: production
+      # Additional environment variables should be added here or via the Render UI.
+    healthCheckPath: /api/health
