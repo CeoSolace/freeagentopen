@@ -31,11 +31,16 @@ declare module 'next-auth/jwt' {
 }
 
 export const authOptions: AuthOptions = {
+  debug: process.env.NODE_ENV !== 'production',
   providers: [
     DiscordProvider({
       clientId: process.env.DISCORD_CLIENT_ID || '',
       clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
-      authorization: { params: { scope: 'identify guilds email' } }
+      authorization: {
+        params: {
+          scope: 'identify email guilds'
+        }
+      }
     })
   ],
   session: {
@@ -48,7 +53,10 @@ export const authOptions: AuthOptions = {
 
       const discordUser = profile as any;
       const discordId = discordUser?.id;
-      if (!discordId) return false;
+
+      if (!discordId) {
+        return false;
+      }
 
       let dbUser = await UserModel.findOne({ discordId });
 
@@ -72,6 +80,7 @@ export const authOptions: AuthOptions = {
       }
 
       const state = getAccessState(dbUser as any);
+
       if (!state.allowed && state.banned) {
         return false;
       }
@@ -79,49 +88,31 @@ export const authOptions: AuthOptions = {
       return true;
     },
 
-    async jwt({ token, user, profile }) {
-      if (user || profile) {
-        const discordProfile = profile as any;
-        const discordId = discordProfile?.id;
+    async jwt({ token, profile }) {
+      const discordProfile = profile as any;
 
-        try {
-          await connectDB();
+      try {
+        await connectDB();
 
-          let dbUser = discordId
-            ? await UserModel.findOne({ discordId })
-            : token.id
-              ? await UserModel.findById(token.id)
-              : null;
+        let dbUser = null;
 
-          if (dbUser) {
-            token.id = dbUser._id.toString();
-            token.roles = dbUser.roles || ['MEMBER'];
-            token.verified = !!dbUser.verified;
-            token.banned = !!dbUser.banned;
-            token.accountAllowed = dbUser.accountAllowed !== false;
-            token.openingFeeDue = !!dbUser.openingFeeDue;
-            token.paymentMethodAdded = !!dbUser.paymentMethodAdded;
-          }
-        } catch (err) {
-          console.warn('Failed to hydrate JWT token:', err);
+        if (discordProfile?.id) {
+          dbUser = await UserModel.findOne({ discordId: discordProfile.id });
+        } else if (token?.id) {
+          dbUser = await UserModel.findById(token.id);
         }
-      } else if (token?.id) {
-        try {
-          await connectDB();
-          const dbUser = await UserModel.findById(token.id);
 
-          if (dbUser) {
-            token.id = dbUser._id.toString();
-            token.roles = dbUser.roles || ['MEMBER'];
-            token.verified = !!dbUser.verified;
-            token.banned = !!dbUser.banned;
-            token.accountAllowed = dbUser.accountAllowed !== false;
-            token.openingFeeDue = !!dbUser.openingFeeDue;
-            token.paymentMethodAdded = !!dbUser.paymentMethodAdded;
-          }
-        } catch (err) {
-          console.warn('Failed to refresh JWT token:', err);
+        if (dbUser) {
+          token.id = dbUser._id.toString();
+          token.roles = dbUser.roles || ['MEMBER'];
+          token.verified = !!dbUser.verified;
+          token.banned = !!dbUser.banned;
+          token.accountAllowed = dbUser.accountAllowed !== false;
+          token.openingFeeDue = !!dbUser.openingFeeDue;
+          token.paymentMethodAdded = !!dbUser.paymentMethodAdded;
         }
+      } catch (err) {
+        console.warn('Failed to hydrate JWT token:', err);
       }
 
       return token;
