@@ -1,65 +1,50 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../api/auth/[...nextauth]/route";
-import { redirect } from "next/navigation";
-import mongoose from "mongoose";
-import ConversationModel from "../../../models/Conversation";
-import UserModel from "../../../models/User";
+import { notFound, redirect } from "next/navigation";
+import { connectDB } from "../../../lib/mongoose";
+import { ConversationModel } from "../../../models/conversation";
+import { UserModel } from "../../../models/user";
+import MessageThread from "../../../components/MessageThread";
 
-interface PageProps {
+interface ConversationPageProps {
   params: {
     conversationId: string;
   };
 }
 
-export default async function ConversationPage({ params }: PageProps) {
+export default async function ConversationPage({
+  params,
+}: ConversationPageProps) {
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.id) {
-    redirect("/verify");
+  if (!session) {
+    redirect("/");
   }
 
-  if (!mongoose.Types.ObjectId.isValid(params.conversationId)) {
-    redirect("/messages");
-  }
+  const { conversationId } = params;
 
-  const convo = await ConversationModel.findById(params.conversationId);
+  await connectDB();
 
-  if (!convo) {
-    redirect("/messages");
+  const convo = await ConversationModel.findById(conversationId);
+
+  if (!convo || !convo.participantIds.includes(session.user.id as any)) {
+    return notFound();
   }
 
   const otherId = convo.participantIds.find(
-    (id: mongoose.Types.ObjectId) => id.toString() !== session.user.id
+    (id: any) => id.toString() !== session.user.id
   );
 
   const otherUser = otherId ? await UserModel.findById(otherId) : null;
 
   return (
     <div className="space-y-4 h-full">
-      <div className="border-b pb-4">
-        <h1 className="text-xl font-semibold">
-          Conversation with {otherUser?.username ?? "Unknown User"}
-        </h1>
-      </div>
+      <h2 className="text-2xl font-semibold">
+        Conversation with {otherUser?.username || "User"}
+      </h2>
 
-      <div className="flex-1 overflow-y-auto">
-        {/* Messages will render here */}
-      </div>
-
-      <div className="border-t pt-4">
-        <form className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Type a message..."
-            className="flex-1 border rounded px-3 py-2"
-          />
-          <button
-            type="submit"
-            className="bg-black text-white px-4 py-2 rounded"
-          >
-            Send
-          </button>
-        </form>
+      <div className="h-[70vh]">
+        <MessageThread conversationId={conversationId} />
       </div>
     </div>
   );
