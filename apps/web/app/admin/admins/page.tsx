@@ -3,10 +3,24 @@ import { authOptions } from '../../api/auth/[...nextauth]/route';
 import { redirect } from 'next/navigation';
 import { hasRole, ROLES } from '../../../lib/roles';
 
+type SessionUserWithRoles = {
+  id?: string;
+  roles?: string[];
+  verified?: boolean;
+  banned?: boolean;
+  openingFeeDue?: boolean;
+  paymentMethodAdded?: boolean;
+  accountAllowed?: boolean;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+};
+
 export default async function AdminAdminsPage() {
   const session = await getServerSession(authOptions);
+  const user = session?.user as SessionUserWithRoles | undefined;
 
-  if (!session?.user || !hasRole(session.user.roles as any, ROLES.OWNER)) {
+  if (!user || !hasRole((user.roles || []) as any, ROLES.OWNER)) {
     redirect('/');
   }
 
