@@ -1,141 +1,30 @@
-import NextAuth, { type AuthOptions, type DefaultSession } from 'next-auth';
-import DiscordProvider from 'next-auth/providers/discord';
-import { connectDB } from './mongoose';
-import { UserModel } from '../models/user';
-import { getAccessState } from './getAccessState';
+'use client';
 
-declare module 'next-auth' {
-  interface Session {
-    user: {
-      id: string;
-      roles: string[];
-      verified: boolean;
-      banned?: boolean;
-      openingFeeDue?: boolean;
-      paymentMethodAdded?: boolean;
-      accountAllowed?: boolean;
-    } & DefaultSession['user'];
-  }
+import { signIn } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
+
+export default function SignInPage() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get('error');
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white px-4">
+      <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-2xl">
+        <h1 className="text-2xl font-semibold mb-4">Sign in</h1>
+
+        {error && (
+          <div className="mb-4 rounded-md bg-red-600/20 border border-red-500/30 px-4 py-3 text-sm text-red-200">
+            Discord sign-in failed. Wait a few minutes, then try again once.
+          </div>
+        )}
+
+        <button
+          onClick={() => signIn('discord')}
+          className="w-full rounded-lg bg-indigo-500 hover:bg-indigo-400 transition px-4 py-3 font-medium"
+        >
+          Sign in with Discord
+        </button>
+      </div>
+    </div>
+  );
 }
-
-declare module 'next-auth/jwt' {
-  interface JWT {
-    id?: string;
-    roles?: string[];
-    verified?: boolean;
-    banned?: boolean;
-    accountAllowed?: boolean;
-    openingFeeDue?: boolean;
-    paymentMethodAdded?: boolean;
-  }
-}
-
-export const authOptions: AuthOptions = {
-  debug: process.env.NODE_ENV !== 'production',
-  providers: [
-    DiscordProvider({
-      clientId: process.env.DISCORD_CLIENT_ID || '',
-      clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
-      authorization: {
-        params: {
-          scope: 'identify email guilds'
-        }
-      }
-    })
-  ],
-  session: {
-    strategy: 'jwt'
-  },
-  secret: process.env.NEXTAUTH_SECRET,
-  callbacks: {
-    async signIn({ profile }) {
-      await connectDB();
-
-      const discordUser = profile as any;
-      const discordId = discordUser?.id;
-
-      if (!discordId) {
-        return false;
-      }
-
-      let dbUser = await UserModel.findOne({ discordId });
-
-      if (!dbUser) {
-        dbUser = await UserModel.create({
-          discordId,
-          username: discordUser.username,
-          discriminator: discordUser.discriminator,
-          avatar: discordUser.avatar,
-          email: discordUser.email,
-          roles: ['MEMBER'],
-          accountAllowed: true,
-          verified: false
-        });
-      } else {
-        dbUser.username = discordUser.username;
-        dbUser.discriminator = discordUser.discriminator;
-        dbUser.avatar = discordUser.avatar;
-        dbUser.email = discordUser.email;
-        await dbUser.save();
-      }
-
-      const state = getAccessState(dbUser as any);
-
-      if (!state.allowed && state.banned) {
-        return false;
-      }
-
-      return true;
-    },
-
-    async jwt({ token, profile }) {
-      const discordProfile = profile as any;
-
-      try {
-        await connectDB();
-
-        let dbUser = null;
-
-        if (discordProfile?.id) {
-          dbUser = await UserModel.findOne({ discordId: discordProfile.id });
-        } else if (token?.id) {
-          dbUser = await UserModel.findById(token.id);
-        }
-
-        if (dbUser) {
-          token.id = dbUser._id.toString();
-          token.roles = dbUser.roles || ['MEMBER'];
-          token.verified = !!dbUser.verified;
-          token.banned = !!dbUser.banned;
-          token.accountAllowed = dbUser.accountAllowed !== false;
-          token.openingFeeDue = !!dbUser.openingFeeDue;
-          token.paymentMethodAdded = !!dbUser.paymentMethodAdded;
-        }
-      } catch (err) {
-        console.warn('Failed to hydrate JWT token:', err);
-      }
-
-      return token;
-    },
-
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id || '';
-        session.user.roles = token.roles || ['MEMBER'];
-        session.user.verified = !!token.verified;
-        session.user.banned = !!token.banned;
-        session.user.openingFeeDue = !!token.openingFeeDue;
-        session.user.paymentMethodAdded = !!token.paymentMethodAdded;
-        session.user.accountAllowed = token.accountAllowed !== false;
-      }
-
-      return session;
-    }
-  },
-  pages: {
-    signIn: '/',
-    error: '/'
-  }
-};
-
-export const handler = NextAuth(authOptions);
