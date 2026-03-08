@@ -1,13 +1,36 @@
-Failed to compile.
-./app/admin/owners/page.tsx:11:28
-Type error: 'session.user' is possibly 'undefined'.
-   9 | export default async function AdminOwnersPage() {
-  10 |   const session = await getServerSession(authOptions);
-> 11 |   if (!session || !hasRole(session.user.roles as any, ROLES.OWNER)) {
-     |                            ^
-  12 |     redirect('/');
-  13 |   }
-  14 |   return (
-/opt/render/project/src/apps/web:
- ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  freeagentsltd-web@1.0.0 build: `next build`
-Exit status 1
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../../api/auth/[...nextauth]/route";
+import { redirect } from "next/navigation";
+import { hasRole, ROLES, type RoleKey } from "../../../lib/roles";
+
+type SessionUserWithRoles = {
+  id?: string;
+  roles?: string[];
+  verified?: boolean;
+  banned?: boolean;
+  openingFeeDue?: boolean;
+  paymentMethodAdded?: boolean;
+  accountAllowed?: boolean;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+};
+
+export default async function AdminOwnersPage() {
+  const session = await getServerSession(authOptions);
+  const user = session?.user as SessionUserWithRoles | undefined;
+  const roles = (user?.roles || []) as RoleKey[];
+
+  if (!user || !hasRole(roles, ROLES.OWNER)) {
+    redirect("/");
+  }
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-2xl font-semibold mb-4">Owners Management</h2>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Owner management tools will be added here.
+      </p>
+    </div>
+  );
+}
