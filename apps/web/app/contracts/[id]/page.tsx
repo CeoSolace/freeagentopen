@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { connectDB } from "../../../lib/mongoose";
 import { ContractModel } from "../../../models/contract";
 import { ContractVersionModel } from "../../../models/contractVersion";
@@ -10,30 +10,23 @@ interface ContractDetailPageProps {
 }
 
 export default async function ContractDetailPage({
-  params
+  params,
 }: ContractDetailPageProps) {
   const user = await requireSessionUser();
 
-  if (!user?.id) {
-    redirect("/");
-  }
-
   await connectDB();
 
-  const contract = await ContractModel.findById(params.id);
+  const contract = await ContractModel.findById(params.id).lean();
 
-  if (!contract || !contract.participantIds.includes(user.id as any)) {
-    return notFound();
+  if (!contract || !(contract.participantIds as any[]).includes(user.id as any)) {
+    notFound();
   }
 
   const versions = await ContractVersionModel.find({
-    contractId: params.id
-  }).sort({ versionNumber: -1 });
+    contractId: params.id,
+  })
+    .sort({ versionNumber: -1 })
+    .lean();
 
-  return (
-    <ContractDetail
-      contract={JSON.parse(JSON.stringify(contract))}
-      versions={JSON.parse(JSON.stringify(versions))}
-    />
-  );
+  return <ContractDetail contract={contract} versions={versions} />;
 }
