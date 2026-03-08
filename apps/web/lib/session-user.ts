@@ -6,6 +6,11 @@ import { authOptions } from "../app/api/auth/[...nextauth]/route";
 type SessionUser = {
   id: string;
   roles: string[];
+  verified: boolean;
+  banned: boolean;
+  accountAllowed: boolean;
+  openingFeeDue: boolean;
+  paymentMethodAdded: boolean;
 };
 
 type SessionUserApiResult =
@@ -27,9 +32,12 @@ export async function requireSessionUser(): Promise<SessionUser> {
 
   return {
     id: String((session.user as any).id),
-    roles: Array.isArray((session.user as any).roles)
-      ? (session.user as any).roles
-      : [],
+    roles: Array.isArray((session.user as any).roles) ? (session.user as any).roles : [],
+    verified: Boolean((session.user as any).verified),
+    banned: Boolean((session.user as any).banned),
+    accountAllowed: (session.user as any).accountAllowed !== false,
+    openingFeeDue: Boolean((session.user as any).openingFeeDue),
+    paymentMethodAdded: Boolean((session.user as any).paymentMethodAdded),
   };
 }
 
@@ -47,9 +55,12 @@ export async function requireSessionUserApi(): Promise<SessionUserApiResult> {
     ok: true,
     user: {
       id: String((session.user as any).id),
-      roles: Array.isArray((session.user as any).roles)
-        ? (session.user as any).roles
-        : [],
+      roles: Array.isArray((session.user as any).roles) ? (session.user as any).roles : [],
+      verified: Boolean((session.user as any).verified),
+      banned: Boolean((session.user as any).banned),
+      accountAllowed: (session.user as any).accountAllowed !== false,
+      openingFeeDue: Boolean((session.user as any).openingFeeDue),
+      paymentMethodAdded: Boolean((session.user as any).paymentMethodAdded),
     },
   };
 }
