@@ -1,22 +1,36 @@
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../api/auth/[...nextauth]/route';
-import { redirect } from 'next/navigation';
-import { connectDB } from '../../../lib/mongoose';
-import { UserModel } from '../../../models/user';
-import { hasRole, ROLES } from '../../../lib/roles';
-import Link from 'next/link';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../../api/auth/[...nextauth]/route";
+import { redirect } from "next/navigation";
+import { connectDB } from "../../../lib/mongoose";
+import { UserModel } from "../../../models/user";
+import { hasRole, ROLES, type RoleKey } from "../../../lib/roles";
+import Link from "next/link";
 
-/**
- * Admin page to list all users. Only admins can access. Each user row links
- * to a detail page where roles and ban status can be modified.
- */
+type SessionUserWithRoles = {
+  id?: string;
+  roles?: string[];
+  verified?: boolean;
+  banned?: boolean;
+  openingFeeDue?: boolean;
+  paymentMethodAdded?: boolean;
+  accountAllowed?: boolean;
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
+};
+
 export default async function AdminUsersPage() {
   const session = await getServerSession(authOptions);
-  if (!session || !hasRole(session.user.roles as any, ROLES.ADMIN)) {
-    redirect('/');
+  const user = session?.user as SessionUserWithRoles | undefined;
+  const roles = (user?.roles || []) as RoleKey[];
+
+  if (!user || !hasRole(roles, ROLES.ADMIN)) {
+    redirect("/");
   }
+
   await connectDB();
   const users = await UserModel.find().sort({ createdAt: -1 });
+
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-semibold mb-4">All Users</h2>
@@ -36,18 +50,26 @@ export default async function AdminUsersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {users.map((user: any) => (
-              <tr key={user._id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+            {users.map((listedUser: any) => (
+              <tr
+                key={listedUser._id.toString()}
+                className="hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
                 <td className="px-4 py-2 whitespace-nowrap">
-                  <Link href={`/admin/users/${user._id.toString()}`} className="text-primary hover:underline">
-                    {user.username}
+                  <Link
+                    href={`/admin/users/${listedUser._id.toString()}`}
+                    className="text-primary hover:underline"
+                  >
+                    {listedUser.username}
                   </Link>
                 </td>
                 <td className="px-4 py-2 whitespace-nowrap text-sm">
-                  {user.roles.join(', ')}
+                  {Array.isArray(listedUser.roles)
+                    ? listedUser.roles.join(", ")
+                    : ""}
                 </td>
                 <td className="px-4 py-2 whitespace-nowrap text-sm">
-                  {user.banned ? 'Banned' : 'Active'}
+                  {listedUser.banned ? "Banned" : "Active"}
                 </td>
               </tr>
             ))}
