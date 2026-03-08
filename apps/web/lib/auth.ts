@@ -1,30 +1,72 @@
-'use client';
+import type { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
+import { connectDB } from "./mongoose";
+import { UserModel } from "../models/user";
 
-import { signIn } from 'next-auth/react';
-import { useSearchParams } from 'next/navigation';
+export const authOptions: NextAuthOptions = {
+  session: {
+    strategy: "jwt",
+  },
+  providers: [
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null;
+        }
 
-export default function SignInPage() {
-  const searchParams = useSearchParams();
-  const error = searchParams.get('error');
+        await connectDB();
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white px-4">
-      <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-2xl">
-        <h1 className="text-2xl font-semibold mb-4">Sign in</h1>
+        const user = await UserModel.findOne({
+          email: credentials.email.toLowerCase(),
+        });
 
-        {error && (
-          <div className="mb-4 rounded-md bg-red-600/20 border border-red-500/30 px-4 py-3 text-sm text-red-200">
-            Discord sign-in failed. Wait a few minutes, then try again once.
-          </div>
-        )}
+        if (!user || !user.passwordHash) {
+          return null;
+        }
 
-        <button
-          onClick={() => signIn('discord')}
-          className="w-full rounded-lg bg-indigo-500 hover:bg-indigo-400 transition px-4 py-3 font-medium"
-        >
-          Sign in with Discord
-        </button>
-      </div>
-    </div>
-  );
-}
+        const isValid = await bcrypt.compare(
+          credentials.password,
+          user.passwordHash
+        );
+
+        if (!isValid) {
+          return null;
+        }
+
+        return {
+          id: String(user._id),
+          email: user.email,
+          name: user.name ?? user.email,
+          roles: Array.isArray(user.roles) ? user.roles : [],
+        };
+      },
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.roles = (user as any).roles ?? [];
+      }
+
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        (session.user as any).id = token.id;
+        (session.user as any).roles = token.roles ?? [];
+      }
+
+      return session;
+    },
+  },
+  pages: {
+    signIn: "/login",
+  },
+};
