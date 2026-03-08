@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -38,7 +38,9 @@ export default function LoginPage() {
   async function onDiscordSignIn() {
     setError("");
     setDiscordLoading(true);
-    await signIn("discord", { callbackUrl });
+    await signIn("discord", {
+      callbackUrl: "/dashboard",
+    });
   }
 
   return (
