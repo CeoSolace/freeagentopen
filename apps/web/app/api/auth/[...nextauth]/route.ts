@@ -1,27 +1,5 @@
-import NextAuth, { type NextAuthOptions } from "next-auth";
-import DiscordProvider from "next-auth/providers/discord";
-
-export const authOptions: NextAuthOptions = {
-  providers: [
-    DiscordProvider({
-      clientId: process.env.DISCORD_CLIENT_ID!,
-      clientSecret: process.env.DISCORD_CLIENT_SECRET!,
-    }),
-  ],
-
-  session: {
-    strategy: "jwt",
-  },
-
-  callbacks: {
-    async session({ session, token }) {
-      if (token?.sub && session.user) {
-        (session.user as any).id = token.sub;
-      }
-      return session;
-    },
-  },
-};
+import NextAuth from "next-auth";
+import { authOptions } from "../../../../lib/auth";
 
 const handler = NextAuth(authOptions);
 
