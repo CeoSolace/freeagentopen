@@ -12,8 +12,14 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
+        email: {
+          label: "Email",
+          type: "email",
+        },
+        password: {
+          label: "Password",
+          type: "password",
+        },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -51,8 +57,10 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
-        token.roles = (user as any).roles ?? [];
+        token.id = (user as any).id;
+        token.roles = Array.isArray((user as any).roles)
+          ? (user as any).roles
+          : [];
       }
 
       return token;
@@ -60,7 +68,9 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).id = token.id;
-        (session.user as any).roles = token.roles ?? [];
+        (session.user as any).roles = Array.isArray(token.roles)
+          ? token.roles
+          : [];
       }
 
       return session;
@@ -69,4 +79,5 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
+  secret: process.env.NEXTAUTH_SECRET,
 };
