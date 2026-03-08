@@ -1,20 +1,13 @@
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../../api/auth/[...nextauth]/route';
-import { redirect } from 'next/navigation';
-import { hasRole, ROLES } from '../../../lib/roles';
-
-/**
- * Admin owners management page placeholder. Only owners can view this page.
- */
-export default async function AdminOwnersPage() {
-  const session = await getServerSession(authOptions);
-  if (!session || !hasRole(session.user.roles as any, ROLES.OWNER)) {
-    redirect('/');
-  }
-  return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-semibold mb-4">Owners Management</h2>
-      <p className="text-sm text-gray-600 dark:text-gray-400">Owner management tools will be added here.</p>
-    </div>
-  );
-}
+Failed to compile.
+./app/admin/owners/page.tsx:11:28
+Type error: 'session.user' is possibly 'undefined'.
+   9 | export default async function AdminOwnersPage() {
+  10 |   const session = await getServerSession(authOptions);
+> 11 |   if (!session || !hasRole(session.user.roles as any, ROLES.OWNER)) {
+     |                            ^
+  12 |     redirect('/');
+  13 |   }
+  14 |   return (
+/opt/render/project/src/apps/web:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  freeagentsltd-web@1.0.0 build: `next build`
+Exit status 1
