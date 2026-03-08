@@ -16,17 +16,17 @@ export default async function ContractDetailPage({
 
   await connectDB();
 
-  const contract = await ContractModel.findById(params.id).lean();
+  const contract = (await ContractModel.findById(params.id).lean()) as any;
 
-  if (!contract || !(contract.participantIds as any[]).includes(user.id as any)) {
+  if (!contract || !(contract.participantIds ?? []).includes(user.id)) {
     notFound();
   }
 
-  const versions = await ContractVersionModel.find({
+  const versions = (await ContractVersionModel.find({
     contractId: params.id,
   })
     .sort({ versionNumber: -1 })
-    .lean();
+    .lean()) as any[];
 
   return <ContractDetail contract={contract} versions={versions} />;
 }
