@@ -1,157 +1,108 @@
-import type { NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
-import DiscordProvider from "next-auth/providers/discord";
-import bcrypt from "bcryptjs";
-import { connectDB } from "./mongoose";
-import { UserModel } from "../models/user";
+"use client";
 
-export const authOptions: NextAuthOptions = {
-  session: {
-    strategy: "jwt",
-  },
-  providers: [
-    DiscordProvider({
-      clientId: process.env.DISCORD_CLIENT_ID || "",
-      clientSecret: process.env.DISCORD_CLIENT_SECRET || "",
-    }),
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        email: {
-          label: "Email",
-          type: "email",
-        },
-        password: {
-          label: "Password",
-          type: "password",
-        },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 
-        await connectDB();
+export default function LoginPage() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [discordLoading, setDiscordLoading] = useState(false);
 
-        const user = await UserModel.findOne({
-          email: credentials.email.toLowerCase(),
-        });
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-        if (!user || !user.passwordHash) {
-          return null;
-        }
+    const result = await signIn("credentials", {
+      email,
+      password,
+      callbackUrl,
+      redirect: false,
+    });
 
-        const isValid = await bcrypt.compare(
-          credentials.password,
-          user.passwordHash
-        );
+    setLoading(false);
 
-        if (!isValid) {
-          return null;
-        }
+    if (result?.error) {
+      setError("Invalid email or password");
+      return;
+    }
 
-        return {
-          id: String(user._id),
-          email: user.email,
-          name: user.name ?? user.email,
-          image: user.image ?? null,
-          roles: Array.isArray(user.roles) ? user.roles : [],
-        };
-      },
-    }),
-  ],
-  callbacks: {
-    async signIn({ user, account, profile }) {
-      if (account?.provider === "discord") {
-        await connectDB();
+    window.location.href = result?.url || callbackUrl;
+  }
 
-        const email =
-          typeof user.email === "string" ? user.email.toLowerCase() : null;
+  async function onDiscordSignIn() {
+    setError("");
+    setDiscordLoading(true);
+    await signIn("discord", { callbackUrl });
+  }
 
-        let existingUser = null;
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 text-white px-4">
+      <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-2xl">
+        <h1 className="text-2xl font-semibold mb-2">Sign in</h1>
+        <p className="text-slate-400 mb-6">Access your FreeAgentsLTD account</p>
 
-        if (email) {
-          existingUser = await UserModel.findOne({ email });
-        }
+        <button
+          type="button"
+          onClick={onDiscordSignIn}
+          disabled={discordLoading}
+          className="w-full rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 px-4 py-2 font-medium mb-4"
+        >
+          {discordLoading ? "Redirecting..." : "Continue with Discord"}
+        </button>
 
-        if (!existingUser) {
-          existingUser = await UserModel.create({
-            email: email ?? `discord_${user.id}@no-email.local`,
-            name:
-              user.name ||
-              (typeof profile?.global_name === "string"
-                ? profile.global_name
-                : typeof profile?.username === "string"
-                ? profile.username
-                : "Discord User"),
-            image:
-              typeof user.image === "string"
-                ? user.image
-                : typeof (profile as any)?.image_url === "string"
-                ? (profile as any).image_url
-                : null,
-            roles: [],
-            discordId:
-              typeof account.providerAccountId === "string"
-                ? account.providerAccountId
-                : undefined,
-          });
-        } else {
-          const updates: Record<string, any> = {};
+        <div className="relative my-4">
+          <div className="border-t border-slate-700" />
+          <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 bg-slate-900 px-3 text-xs text-slate-400">
+            OR
+          </span>
+        </div>
 
-          if (
-            !existingUser.discordId &&
-            typeof account.providerAccountId === "string"
-          ) {
-            updates.discordId = account.providerAccountId;
-          }
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 outline-none"
+              placeholder="you@example.com"
+              required
+            />
+          </div>
 
-          if (!existingUser.image && typeof user.image === "string") {
-            updates.image = user.image;
-          }
+          <div>
+            <label className="block text-sm mb-1">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 outline-none"
+              placeholder="••••••••"
+              required
+            />
+          </div>
 
-          if (Object.keys(updates).length > 0) {
-            await UserModel.updateOne({ _id: existingUser._id }, updates);
-            existingUser = await UserModel.findById(existingUser._id);
-          }
-        }
+          {error ? (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {error}
+            </div>
+          ) : null}
 
-        if (existingUser) {
-          (user as any).id = String(existingUser._id);
-          (user as any).roles = Array.isArray(existingUser.roles)
-            ? existingUser.roles
-            : [];
-          return true;
-        }
-
-        return false;
-      }
-
-      return true;
-    },
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = (user as any).id;
-        token.roles = Array.isArray((user as any).roles)
-          ? (user as any).roles
-          : [];
-      }
-
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).roles = Array.isArray(token.roles)
-          ? token.roles
-          : [];
-      }
-
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/login",
-  },
-  secret: process.env.NEXTAUTH_SECRET,
-};
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium hover:bg-blue-500 disabled:opacity-60"
+          >
+            {loading ? "Signing in..." : "Sign in with Email"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
