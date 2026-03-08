@@ -1,6 +1,12 @@
 import { getServerSession } from "next-auth/next";
+import { redirect } from "next/navigation";
 import { NextResponse } from "next/server";
 import { authOptions } from "../app/api/auth/[...nextauth]/route";
+
+type SessionUser = {
+  id: string;
+  roles: string[];
+};
 
 type SessionUserApiResult =
   | {
@@ -9,11 +15,23 @@ type SessionUserApiResult =
     }
   | {
       ok: true;
-      user: {
-        id: string;
-        roles: string[];
-      };
+      user: SessionUser;
     };
+
+export async function requireSessionUser(): Promise<SessionUser> {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user || !(session.user as any).id) {
+    redirect("/login");
+  }
+
+  return {
+    id: String((session.user as any).id),
+    roles: Array.isArray((session.user as any).roles)
+      ? (session.user as any).roles
+      : [],
+  };
+}
 
 export async function requireSessionUserApi(): Promise<SessionUserApiResult> {
   const session = await getServerSession(authOptions);
