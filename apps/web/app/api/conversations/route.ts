@@ -1,43 +1,55 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../auth/[...nextauth]/route';
-import { connectDB } from '../../../lib/mongoose';
-import { ConversationModel } from '../../../models/conversation';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { connectDB } from "../../../lib/mongoose";
+import { ConversationModel } from "../../../models/conversation";
+import { requireSessionUserApi } from "../../../lib/session-user";
 
-const createSchema = z.object({
-  participantId: z.string()
+const createConversationSchema = z.object({
+  participantId: z.string().min(1)
 });
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(_req: NextRequest) {
+  const auth = await requireSessionUserApi();
+  if (!auth.ok) return auth.response;
+
   await connectDB();
-  const conversations = await ConversationModel.find({ participantIds: session.user.id }).sort({ updatedAt: -1 });
+
+  const conversations = await ConversationModel.find({
+    participantIds: auth.user.id
+  }).sort({ updatedAt: -1 });
+
   return NextResponse.json({ data: conversations });
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const body = await req.json();
-  const parsed = createSchema.safeParse(body);
+  const auth = await requireSessionUserApi();
+  if (!auth.ok) return auth.response;
+
+  const body = await req.json().catch(() => null);
+  const parsed = createConversationSchema.safeParse(body);
+
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json(
+      { error: parsed.error.flatten() },
+      { status: 400 }
+    );
   }
-  const otherUserId = parsed.data.participantId;
+
   await connectDB();
-  // Check if conversation exists
-  const existing = await ConversationModel.findOne({
-    participantIds: { $all: [session.user.id, otherUserId], $size: 2 }
+
+  const participantIds = Array.from(
+    new Set([auth.user.id, parsed.data.participantId])
+  );
+
+  let conversation = await ConversationModel.findOne({
+    participantIds: { $all: participantIds, $size: participantIds.length }
   });
-  if (existing) {
-    return NextResponse.json({ data: existing });
+
+  if (!conversation) {
+    conversation = await ConversationModel.create({
+      participantIds
+    });
   }
-  const convo = await ConversationModel.create({ participantIds: [session.user.id, otherUserId] });
-  return NextResponse.json({ data: convo });
+
+  return NextResponse.json({ data: conversation }, { status: 201 });
 }
