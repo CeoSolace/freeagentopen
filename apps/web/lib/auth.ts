@@ -68,7 +68,7 @@ export const authOptions: NextAuthOptions = {
         const email =
           typeof user.email === "string" ? user.email.toLowerCase() : null;
 
-        let existingUser = null;
+        let existingUser: any = null;
 
         if (email) {
           existingUser = await UserModel.findOne({ email });
@@ -76,33 +76,22 @@ export const authOptions: NextAuthOptions = {
 
         if (!existingUser) {
           existingUser = await UserModel.create({
-            email: email ?? `discord_${user.id}@no-email.local`,
+            email: email ?? `discord_${account.providerAccountId}@no-email.local`,
             name:
               user.name ||
-              (typeof profile?.global_name === "string"
-                ? profile.global_name
-                : typeof profile?.username === "string"
-                ? profile.username
+              (typeof (profile as any)?.global_name === "string"
+                ? (profile as any).global_name
+                : typeof (profile as any)?.username === "string"
+                ? (profile as any).username
                 : "Discord User"),
-            image:
-              typeof user.image === "string"
-                ? user.image
-                : typeof (profile as any)?.image_url === "string"
-                ? (profile as any).image_url
-                : null,
+            image: typeof user.image === "string" ? user.image : null,
             roles: [],
-            discordId:
-              typeof account.providerAccountId === "string"
-                ? account.providerAccountId
-                : undefined,
+            discordId: account.providerAccountId,
           });
         } else {
           const updates: Record<string, any> = {};
 
-          if (
-            !existingUser.discordId &&
-            typeof account.providerAccountId === "string"
-          ) {
+          if (!existingUser.discordId) {
             updates.discordId = account.providerAccountId;
           }
 
@@ -116,15 +105,16 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
-        if (existingUser) {
-          (user as any).id = String(existingUser._id);
-          (user as any).roles = Array.isArray(existingUser.roles)
-            ? existingUser.roles
-            : [];
-          return true;
+        if (!existingUser) {
+          return false;
         }
 
-        return false;
+        (user as any).id = String(existingUser._id);
+        (user as any).roles = Array.isArray(existingUser.roles)
+          ? existingUser.roles
+          : [];
+
+        return true;
       }
 
       return true;
